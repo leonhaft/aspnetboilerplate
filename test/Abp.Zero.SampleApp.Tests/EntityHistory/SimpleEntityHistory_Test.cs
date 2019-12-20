@@ -18,6 +18,7 @@ using System.Data.Entity.Infrastructure;
 using System.Linq;
 using Abp.Application.Editions;
 using Abp.Application.Features;
+using Abp.Authorization.Roles;
 using Abp.Zero.SampleApp.TPH;
 using Xunit;
 
@@ -720,7 +721,6 @@ namespace Abp.Zero.SampleApp.Tests.EntityHistory
 
             return _studentRepository.InsertAndGetId(student);
         }
-
         #endregion
 
         #region CASES DON'T WRITE HISTORY
@@ -858,6 +858,47 @@ namespace Abp.Zero.SampleApp.Tests.EntityHistory
             _entityHistoryStore.DidNotReceive().Save(Arg.Any<EntityChangeSet>());
         }
 
+        [Fact]
+        public void Should_Not_Write_History_For_Entity_With_Shadow_Property_Discriminator()
+        {
+            Resolve<IEntityHistoryConfiguration>().IsEnabled = true;
+            Resolve<IEntityHistoryConfiguration>().Selectors.Clear();
+
+            _entityHistoryStore.ClearReceivedCalls();
+            //Arrange
+            UsingDbContext((context) =>
+            {
+                var role = context.Roles.FirstOrDefault();
+                role.ShouldNotBeNull();
+
+                context.RolePermissions.Add(new RolePermissionSetting()
+                {
+                    Name = "Test",
+                    RoleId = role.Id
+                });
+                context.SaveChanges();
+            });
+
+            _entityHistoryStore.DidNotReceive().Save(Arg.Any<EntityChangeSet>());
+        }
+
+        [Fact]
+        public void Should_Not_Write_History_For_Full_Audited_Entity()
+        {
+            Resolve<IEntityHistoryConfiguration>().IsEnabled = true;
+
+            _entityHistoryStore.ClearReceivedCalls();
+
+            //Arrange
+            UsingDbContext((context) =>
+            {
+                context.Countries.Add(new Country() { CountryCode = "My Country" });
+                context.SaveChanges();
+            });
+
+            //Assert
+            _entityHistoryStore.DidNotReceive().Save(Arg.Any<EntityChangeSet>());
+        }
         #endregion
 
         private int CreateBlogAndGetId()
